@@ -4,10 +4,6 @@
 #include <windows.h>
 #include <stdbool.h>
 
-#define FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
-#define BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
-#define ASCII_FULL_BLOCK 0xDB
-
 bool console_buffer_init(ConsoleBuffer *console_buffer, const unsigned short int width,
                          const unsigned short int height, const ConsoleBufferSettings settings)
 {
@@ -29,9 +25,9 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
                              const unsigned short int y)
 {
 	CHAR_INFO *cell;
-	if (x > console_buffer->width || y > console_buffer->height)
+	if (x > console_buffer->width - 1 || y > console_buffer->height - 1)
 	{
-		switch (console_buffer->settings.clip_mode)
+		switch (console_buffer->settings.attributes & 0xF0)
 		{
 			case CLIP_ERROR:
 				// error
@@ -52,7 +48,7 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
 
 	if (cell->Char.AsciiChar != 0)
 	{
-		switch (console_buffer->settings.overlap_mode)
+		switch (console_buffer->settings.attributes & 0x0F)
 		{
 			case OVERLAP_REPLACE:
 				*cell = (CHAR_INFO){
@@ -62,6 +58,7 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
 				break;
 			case OVERLAP_XOR:
 				cell->Char.AsciiChar = 0;
+				cell->Attributes = 0;
 				break;
 			default:
 				// error
@@ -156,10 +153,9 @@ bool console_init(Console *console, const unsigned short int width, const unsign
 	return true;
 }
 
-void console_set_cell(const Console *console, const unsigned short int x, const unsigned short int y)
+bool console_set_cell(const Console *console, const unsigned short int x, const unsigned short int y)
 {
-	console_buffer_set_cell(&console->screen_buffer, x, y, console->settings.default_cell_char,
-	                        console->settings.default_cell_color);
+	return console_buffer_set_cell(&console->screen_buffer, x, y);
 }
 
 bool console_update(const Console *console)
