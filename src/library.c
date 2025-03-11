@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <stdbool.h>
 
+#define INPUT_EVENTS_BATCH_SIZE 32
+
 bool console_buffer_init(ConsoleBuffer *console_buffer, const unsigned short int width,
                          const unsigned short int height, const ConsoleBufferSettings settings)
 {
@@ -29,10 +31,10 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
 	{
 		switch (console_buffer->settings.attributes & 0xF0)
 		{
-			case CLIP_ERROR:
+			case CONSOLE_BUFFER_CLIP_ERROR:
 				// error
 				return false;
-			case CLIP_WRAP:
+			case CONSOLE_BUFFER_CLIP_WRAP:
 				cell = &console_buffer->buffer[console_buffer->width * (y % console_buffer->height) +
 				                               x % console_buffer->width];
 				break;
@@ -50,13 +52,13 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
 	{
 		switch (console_buffer->settings.attributes & 0x0F)
 		{
-			case OVERLAP_REPLACE:
+			case CONSOLE_BUFFER_OVERLAP_REPLACE:
 				*cell = (CHAR_INFO){
 					.Char = console_buffer->settings.default_cell_char,
 					.Attributes = console_buffer->settings.default_cell_color
 				};
 				break;
-			case OVERLAP_XOR:
+			case CONSOLE_BUFFER_OVERLAP_XOR:
 				cell->Char.AsciiChar = 0;
 				cell->Attributes = 0;
 				break;
@@ -76,6 +78,11 @@ bool console_buffer_set_cell(const ConsoleBuffer *console_buffer, const unsigned
 	return true;
 }
 
+void console_buffer_clear(const ConsoleBuffer *console_buffer)
+{
+	memset(console_buffer->buffer, 0, console_buffer->width * console_buffer->height * sizeof(CHAR_INFO));
+}
+
 void console_buffer_destroy(ConsoleBuffer *console_buffer)
 {
 	free(console_buffer->buffer);
@@ -87,21 +94,22 @@ void console_buffer_destroy(ConsoleBuffer *console_buffer)
 bool console_init(Console *console, const unsigned short int width, const unsigned short int height,
                   const ConsoleBufferSettings settings)
 {
-	HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	if (console_handle == INVALID_HANDLE_VALUE)
+	HANDLE input_handle = GetStdHandle(STD_INPUT_HANDLE);
+	HANDLE output_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (input_handle == INVALID_HANDLE_VALUE || output_handle == INVALID_HANDLE_VALUE)
 	{
 		// error
 		return false;
 	}
 
 	SMALL_RECT window_rect = {0, 0, 1, 1};
-	if (!SetConsoleWindowInfo(console_handle, TRUE, &window_rect))
+	if (!SetConsoleWindowInfo(output_handle, TRUE, &window_rect))
 	{
 		// error
 		return false;
 	}
 
-	if (!SetConsoleScreenBufferSize(console_handle, (COORD){(SHORT) width, (SHORT) height}))
+	if (!SetConsoleScreenBufferSize(output_handle, (COORD){(SHORT) width, (SHORT) height}))
 	{
 		// error
 		return false;
@@ -114,7 +122,7 @@ bool console_init(Console *console, const unsigned short int width, const unsign
 		.FontFamily = FF_DONTCARE,
 		.FontWeight = FW_NORMAL
 	};
-	if (!SetCurrentConsoleFontEx(console_handle, FALSE, &console_font))
+	if (!SetCurrentConsoleFontEx(output_handle, FALSE, &console_font))
 	{
 		// error
 		return false;
@@ -124,14 +132,14 @@ bool console_init(Console *console, const unsigned short int width, const unsign
 		.dwSize = 1,
 		.bVisible = FALSE
 	};
-	if (!SetConsoleCursorInfo(console_handle, &console_cursor))
+	if (!SetConsoleCursorInfo(output_handle, &console_cursor))
 	{
 		// error
 		return false;
 	}
 
 	window_rect = (SMALL_RECT){0, 0, (SHORT) (width - 1), (SHORT) (height - 1)};
-	if (!SetConsoleWindowInfo(console_handle, TRUE, &window_rect))
+	if (!SetConsoleWindowInfo(output_handle, TRUE, &window_rect))
 	{
 		// error
 		return false;
@@ -144,7 +152,8 @@ bool console_init(Console *console, const unsigned short int width, const unsign
 		return false;
 	}
 
-	console->handle = console_handle;
+	console->input_handle = input_handle;
+	console->output_handle = output_handle;
 	console->screen_buffer = screen_buffer;
 	console->window_rect = window_rect;
 	// console->width = width;
@@ -158,10 +167,59 @@ bool console_set_cell(const Console *console, const unsigned short int x, const 
 	return console_buffer_set_cell(&console->screen_buffer, x, y);
 }
 
-bool console_update(const Console *console)
+void console_clear(const Console *console)
 {
-	return WriteConsoleOutputA(console->handle, console->screen_buffer.buffer,
-	                           (COORD){(SHORT) console->screen_buffer.width, (SHORT) console->screen_buffer.height},
+	console_buffer_clear(&console->screen_buffer);
+}
+
+bool console_poll_events(Console *console)
+{
+	DWORD n_events;
+	if (!GetNumberOfConsoleInputEvents(console->input_handle, &n_events))
+	{
+		// error
+		return false;
+	}
+
+	INPUT_RECORD input_events[INPUT_EVENTS_BATCH_SIZE];
+
+	// handle n_events > INPUT_EVENTS_BATCH_SIZE
+	if (n_events > 0)
+	{
+		DWORD n_events_read = 0;
+		if (!ReadConsoleInputA(console->input_handle, input_events, INPUT_EVENTS_BATCH_SIZE, &n_events_read))
+		{
+			// error
+			return false;
+		}
+		if (n_events_read != n_events)
+		{
+			// error
+			return false;
+		}
+
+		for (DWORD i = 0; i < n_events; i++)
+		{
+			INPUT_RECORD event = input_events[i];
+			switch (event.EventType)
+			{
+				case KEY_EVENT:
+					printf("%d ", event.Event.KeyEvent.wVirtualKeyCode);
+					break;
+			}
+			// ReadConsoleInputA();
+		}
+	}
+
+	return true;
+}
+
+bool console_render(const Console *console)
+{
+	return WriteConsoleOutputA(console->output_handle, console->screen_buffer.buffer,
+	                           (COORD){
+		                           (SHORT) console->screen_buffer.width, (SHORT) console->screen_buffer.height
+	                           },
 	                           (COORD){0, 0}, (PSMALL_RECT) &console->window_rect);
 }
 

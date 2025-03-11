@@ -10,14 +10,14 @@
 
 typedef enum
 {
-  OVERLAP_REPLACE = 0x01,
-  OVERLAP_XOR = 0x02,
+  CONSOLE_BUFFER_OVERLAP_REPLACE = 0x01,
+  CONSOLE_BUFFER_OVERLAP_XOR = 0x02,
 } CONSOLE_BUFFER_OVERLAP_MODE;
 
 typedef enum
 {
-  CLIP_ERROR = 0x10,
-  CLIP_WRAP = 0x20,
+  CONSOLE_BUFFER_CLIP_ERROR = 0x10,
+  CONSOLE_BUFFER_CLIP_WRAP = 0x20,
 } CONSOLE_BUFFER_CLIP_MODE;
 
 typedef unsigned char CONSOLE_BUFFER_ATTRIBUTES;
@@ -39,9 +39,17 @@ typedef struct
 
 typedef struct
 {
-  HANDLE handle;
+  bool pressed;
+  bool held;
+} ConsoleInputKey;
+
+typedef struct
+{
+  HANDLE output_handle;
+  HANDLE input_handle;
   ConsoleBuffer screen_buffer;
   SMALL_RECT window_rect;
+  ConsoleInputKey input_keys[0xFF];
   // unsigned short int width;
   // unsigned short int height;
 } Console;
@@ -51,6 +59,8 @@ bool console_init(Console *console, unsigned short int width, unsigned short int
 
 bool console_set_cell(const Console *console, unsigned short int x, unsigned short int y);
 
-bool console_update(const Console *console);
+bool console_render(const Console *console);
+
+bool console_poll_events(Console *console);
 
 #endif

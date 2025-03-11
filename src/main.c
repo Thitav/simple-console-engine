@@ -9,7 +9,7 @@ int main(void)
                     {
                       BACKGROUND_RED | FOREGROUND_WHITE,
                       ASCII_FULL_BLOCK,
-                      OVERLAP_XOR | CLIP_WRAP
+                      CONSOLE_BUFFER_OVERLAP_XOR | CONSOLE_BUFFER_CLIP_WRAP
                     }
     )
   )
@@ -20,10 +20,11 @@ int main(void)
 
   console_set_cell(&console, 0, 0);
   console_set_cell(&console, 80, 1);
-  console_update(&console);
+  console_render(&console);
 
   while (1)
   {
+    console_poll_events(&console);
   }
 
   return EXIT_SUCCESS;
