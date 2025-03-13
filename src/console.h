@@ -90,11 +90,10 @@ inline bool sce_console_render(const SCE_Console *console)
                              (COORD){0, 0}, (PSMALL_RECT) &console->window_rect);
 }
 
+bool sce_console_init(SCE_Console *console, uint16_t width, uint16_t height,
+                      SCE_ConsoleBufferAttributes attributes);
 
 bool sce_console_poll_events(SCE_Console *console);
-
-bool sce_console_init(SCE_Console *console, uint16_t width, uint16_t height,
-                      SCE_Console settings);
 
 void sce_console_destroy(SCE_Console *console);
 
