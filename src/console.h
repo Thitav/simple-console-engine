@@ -5,9 +5,9 @@
 #include <windows.h>
 #include <stdint.h>
 
-#define FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
-#define BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
-#define ASCII_FULL_BLOCK 0xDB
+#define SCE_FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+#define SCE_BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
+#define SCE_ASCII_FULL_BLOCK 0xDB
 
 typedef struct
 {
@@ -63,17 +63,16 @@ bool sce_console_buffer_init(SCE_ConsoleBuffer *console_buffer, unsigned short i
                              unsigned short int height, SCE_ConsoleBufferAttributes attributes);
 
 bool sce_console_buffer_set_cell(const SCE_ConsoleBuffer *console_buffer, uint16_t x,
-                                 uint16_t y, char ch, uint16_t color);
+                                 uint16_t y, SCE_ConsoleCell cell);
 
 
 void sce_console_buffer_destroy(SCE_ConsoleBuffer *console_buffer);
 
 // console
 
-inline bool sce_console_set_cell(const SCE_Console *console, const uint16_t x, const uint16_t y, const char ch,
-                                 const uint16_t color)
+inline bool sce_console_set_cell(const SCE_Console *console, const uint16_t x, const uint16_t y, SCE_ConsoleCell cell)
 {
-  return sce_console_buffer_set_cell(&console->screen_buffer, x, y, ch, color);
+  return sce_console_buffer_set_cell(&console->screen_buffer, x, y, cell);
 }
 
 inline void sce_console_clear(const SCE_Console *console)

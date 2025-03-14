@@ -5,6 +5,9 @@
 
 #define INPUT_EVENTS_BATCH_SIZE 32
 
+extern bool sce_console_set_cell(const SCE_Console *console, uint16_t x, uint16_t y, SCE_ConsoleCell cell);
+extern bool sce_console_render(const SCE_Console *console);
+
 bool sce_console_buffer_init(SCE_ConsoleBuffer *console_buffer, const uint16_t width,
                              const uint16_t height, const SCE_ConsoleBufferAttributes attributes)
 {
@@ -142,11 +145,12 @@ bool sce_console_init(SCE_Console *console, const uint16_t width, const uint16_t
     return false;
   }
 
+  memset(console->input_keys, 0, sizeof(console->input_keys));
+
   console->input_handle = input_handle;
   console->output_handle = output_handle;
   console->screen_buffer = screen_buffer;
   console->window_rect = window_rect;
-  console->input_keys = {0};
   // console->width = width;
   // console->height = height;
 
