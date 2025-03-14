@@ -5,7 +5,12 @@
 
 #define INPUT_EVENTS_BATCH_SIZE 32
 
+extern void sce_console_buffer_clear(const SCE_ConsoleBuffer *console_buffer);
+
 extern bool sce_console_set_cell(const SCE_Console *console, uint16_t x, uint16_t y, SCE_ConsoleCell cell);
+
+extern void sce_console_clear(const SCE_Console *console);
+
 extern bool sce_console_render(const SCE_Console *console);
 
 bool sce_console_buffer_init(SCE_ConsoleBuffer *console_buffer, const uint16_t width,
