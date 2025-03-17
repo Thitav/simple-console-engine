@@ -13,6 +13,8 @@ extern void sce_console_clear(const SCE_Console *console);
 
 extern bool sce_console_render(const SCE_Console *console);
 
+extern SCE_ConsoleInputKey sce_console_get_key(const SCE_Console *console, uint8_t key);
+
 bool sce_console_buffer_init(SCE_ConsoleBuffer *console_buffer, const uint16_t width,
                              const uint16_t height, const SCE_ConsoleBufferAttributes attributes)
 {
@@ -36,7 +38,7 @@ bool sce_console_buffer_set_cell(const SCE_ConsoleBuffer *console_buffer, const 
   CHAR_INFO *selected_cell;
   if (x > console_buffer->width - 1 || y > console_buffer->height - 1)
   {
-    switch (console_buffer->attributes & 0xF0)
+    switch (console_buffer->attributes.clip_mode)
     {
       case SCE_CONSOLE_BUFFER_CLIP_ERROR:
         // error
@@ -57,7 +59,7 @@ bool sce_console_buffer_set_cell(const SCE_ConsoleBuffer *console_buffer, const 
 
   if (selected_cell->Char.AsciiChar != 0)
   {
-    switch (console_buffer->attributes & 0x0F)
+    switch (console_buffer->attributes.overlap_mode)
     {
       case SCE_CONSOLE_BUFFER_OVERLAP_REPLACE:
         selected_cell->Char.AsciiChar = cell.ch;
@@ -177,12 +179,7 @@ bool sce_console_poll_events(SCE_Console *console)
     INPUT_RECORD input_events[INPUT_EVENTS_BATCH_SIZE];
     DWORD n_events_read = 0;
 
-    if (!ReadConsoleInput(console->input_handle, input_events, INPUT_EVENTS_BATCH_SIZE, &n_events_read))
-    {
-      // error
-      return false;
-    }
-    if (n_events_read != n_events)
+    if (!ReadConsoleInputA(console->input_handle, input_events, INPUT_EVENTS_BATCH_SIZE, &n_events_read))
     {
       // error
       return false;
