@@ -5,7 +5,8 @@
 int main(void)
 {
   SCE_Console console;
-  if (!sce_console_init(&console, 80, 80, SCE_CONSOLE_BUFFER_OVERLAP_XOR | SCE_CONSOLE_BUFFER_CLIP_WRAP)
+  if (!sce_console_init(&console, 80, 80,
+                        (SCE_ConsoleBufferAttributes){SCE_CONSOLE_BUFFER_OVERLAP_XOR, SCE_CONSOLE_BUFFER_CLIP_WRAP})
   )
   {
     // error
