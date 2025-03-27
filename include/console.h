@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <windows.h>
 #include <stdint.h>
+#include "types.h"
 
 #define SCE_FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
 #define SCE_BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
@@ -45,7 +46,22 @@ typedef struct
 {
   bool pressed;
   bool held;
-} SCE_ConsoleInputKey;
+} SCE_KeyboardKeyState;
+
+typedef struct
+{
+  bool left: 1;
+  bool right: 1;
+  bool second: 1;
+  bool third: 1;
+  bool fourth: 1;
+} SCE_MouseButtonsState;
+
+typedef struct
+{
+  SCE_Coord16 position;
+  SCE_MouseButtonsState buttons;
+} SCE_MouseState;
 
 typedef struct
 {
@@ -53,7 +69,8 @@ typedef struct
   HANDLE input_handle;
   SCE_ConsoleBuffer screen_buffer;
   SMALL_RECT window_rect;
-  SCE_ConsoleInputKey input_keys[0xFF];
+  SCE_KeyboardKeyState keyboard[0xFF];
+  SCE_MouseState mouse;
   // unsigned short int width;
   // unsigned short int height;
 } SCE_Console;
@@ -99,9 +116,9 @@ inline bool sce_console_render(const SCE_Console *console)
                              (COORD){0, 0}, (PSMALL_RECT) &console->window_rect);
 }
 
-inline SCE_ConsoleInputKey sce_console_get_key(const SCE_Console *console, const uint8_t key)
+inline SCE_KeyboardKeyState sce_console_get_key(const SCE_Console *console, const uint8_t key)
 {
-  return console->input_keys[key];
+  return console->keyboard[key];
 }
 
 #endif

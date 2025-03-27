@@ -1,4 +1,4 @@
-#include "console.h"
+#include "../include/console.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <windows.h>
@@ -13,7 +13,7 @@ extern void sce_console_clear(const SCE_Console *console);
 
 extern bool sce_console_render(const SCE_Console *console);
 
-extern SCE_ConsoleInputKey sce_console_get_key(const SCE_Console *console, uint8_t key);
+extern SCE_KeyboardKeyState sce_console_get_key(const SCE_Console *console, uint8_t key);
 
 bool sce_console_buffer_init(SCE_ConsoleBuffer *console_buffer, const uint16_t width,
                              const uint16_t height, const SCE_ConsoleBufferAttributes attributes)
@@ -145,6 +145,12 @@ bool sce_console_init(SCE_Console *console, const uint16_t width, const uint16_t
     return false;
   }
 
+  if (!SetConsoleMode(input_handle, ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
+  {
+    // error
+    return false;
+  }
+
   SCE_ConsoleBuffer screen_buffer;
   if (!sce_console_buffer_init(&screen_buffer, width, height, attributes))
   {
@@ -152,7 +158,7 @@ bool sce_console_init(SCE_Console *console, const uint16_t width, const uint16_t
     return false;
   }
 
-  memset(console->input_keys, 0, sizeof(console->input_keys));
+  memset(console->keyboard, 0, sizeof(console->keyboard));
 
   console->input_handle = input_handle;
   console->output_handle = output_handle;
@@ -192,10 +198,19 @@ bool sce_console_poll_events(SCE_Console *console)
       {
         case KEY_EVENT:
           const KEY_EVENT_RECORD key_event = event.Event.KeyEvent;
-          SCE_ConsoleInputKey *input_key = &console->input_keys[key_event.wVirtualKeyCode];
+          SCE_KeyboardKeyState *input_key = &console->keyboard[key_event.wVirtualKeyCode];
 
           input_key->held = key_event.bKeyDown && (input_key->pressed || key_event.wRepeatCount > 1);
           input_key->pressed = key_event.bKeyDown;
+
+          break;
+        case MOUSE_EVENT:
+          const MOUSE_EVENT_RECORD mouse_event = event.Event.MouseEvent;
+
+          console->mouse.position = (SCE_Coord16){
+            mouse_event.dwMousePosition.X, mouse_event.dwMousePosition.Y
+          };
+        // handle buttons and wheels
 
           break;
         default:
