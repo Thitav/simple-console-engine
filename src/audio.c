@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <audioclient.h>
+#include <limits.h>
 
 #define REFERENCE_TIME_PER_SEC 10000000
 
@@ -43,21 +44,58 @@ void sce_audio_source_load_wav(SCE_AudioSource *audio_source, const char *filena
 {
   FILE *file = fopen(filename, "rb");
 
-  char data[4];
+  char dump[4];
 
-  fread(data, sizeof(char), 4, file);
-  if (strncmp(data, "RIFF", 4) != 0)
+  fread(dump, sizeof(char), 4, file); // "RIFF"
+  if (strncmp(dump, "RIFF", 4) != 0)
   {
     // error
     return;
   }
 
-  fread(data, sizeof(char), 4, data); // not interested
-  fread(data, sizeof(char), 4, data);
-  if (strncmp(data, "WAVE", 4) != 0)
+  fread(dump, sizeof(char), 4, file); // not interested
+  fread(dump, sizeof(char), 4, file); // "WAVE"
+  if (strncmp(dump, "WAVE", 4) != 0)
   {
     return;
   }
+
+  WAVEFORMATEX wave_format;
+  fread(dump, sizeof(char), 4, file);                                // "fmt "
+  fread(dump, sizeof(char), 4, file);                                // not interested
+  fread(&wave_format, sizeof(WAVEFORMATEX) - sizeof(WORD), 1, file); // wave format header
+
+  // reading audio chunks
+  int32_t chunk_size = 0;
+  fread(dump, sizeof(char), 4, file);            // chunk header
+  fread(&chunk_size, sizeof(uint32_t), 1, file); // chunk size
+  while (strncmp(dump, "data", 4) != 0)
+  {
+    // skip non audio data
+    fseek(file, chunk_size, SEEK_CUR);
+    fread(dump, sizeof(char), 4, file);
+    fread(&chunk_size, sizeof(long), 1, file);
+  }
+
+  const int32_t samples_count = chunk_size / (wave_format.nChannels * (wave_format.wBitsPerSample / 8));
+  float *samples_data = malloc(samples_count * wave_format.nChannels * sizeof(float));
+
+
+  for (uint32_t i = 0; i < samples_count; i++)
+  {
+    for (uint16_t j = 0; j < wave_format.nChannels; j++)
+    {
+      int16_t data = 0;
+      fread(&data, sizeof(int16_t), 1, file);
+      samples_data[i * wave_format.nChannels + j] = (float) data / (float) INT16_MAX;
+    }
+  }
+
+  fclose(file);
+
+  audio_source->channels = wave_format.nChannels;
+  audio_source->samples_count = samples_count;
+  audio_source->samples_data = samples_data;
 }
 
 bool sce_audio_engine_init(SCE_AudioEngine *audio_engine)
