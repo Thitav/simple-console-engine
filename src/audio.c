@@ -13,31 +13,17 @@ void sce_audio_source_set_format()
 {
 }
 
-uint32_t sce_audio_source_copy(SCE_AudioSource *audio_source, uint32_t frames_count, const uint8_t *destination,
-                               DWORD *flags)
+uint32_t sce_audio_source_copy(const SCE_AudioSource *audio_source, const uint32_t frame_index,
+                               const uint32_t frame_count,
+                               const float *destination)
 {
-  uint32_t copy_frames_count;
-  if (audio_source->free_frames < frames_count)
-  {
-    copy_frames_count = audio_source->free_frames;
-  }
-  else
-  {
-    copy_frames_count = frames_count;
-  }
+  uint32_t copied_frame_count = frame_count > audio_source->frame_count - frame_index
+                                  ? audio_source->frame_count - frame_index
+                                  : frame_count;
 
-  if (copy_frames_count == 0)
-  {
-    *flags = AUDCLNT_BUFFERFLAGS_SILENT;
-    return 0;
-  }
-
-  memcpy(&audio_source->frames[audio_source->current_frame], destination, copy_frames_count * audio_source->frame_size);
-  audio_source->current_frame += copy_frames_count;
-  audio_source->free_frames -= copy_frames_count;
-
-  *flags = 0;
-  return copy_frames_count;
+  memcpy(&audio_source->frame_data[frame_index], destination,
+         copied_frame_count * audio_source->frame_size);
+  return copied_frame_count;
 }
 
 void sce_audio_source_load_wav(SCE_AudioSource *audio_source, const char *filename)
@@ -77,25 +63,50 @@ void sce_audio_source_load_wav(SCE_AudioSource *audio_source, const char *filena
     fread(&chunk_size, sizeof(long), 1, file);
   }
 
-  const int32_t samples_count = chunk_size / (wave_format.nChannels * (wave_format.wBitsPerSample / 8));
-  float *samples_data = malloc(samples_count * wave_format.nChannels * sizeof(float));
+  // frame = 1 sample per channel
+  const uint32_t sample_bits_max = (1 << wave_format.wBitsPerSample) - 1;
+  const uint16_t sample_size = wave_format.wBitsPerSample / CHAR_BIT;
+  const uint32_t frame_size = sample_size * wave_format.nChannels;
+  const uint32_t sample_count = chunk_size / sample_size;
+  const uint32_t frame_count = chunk_size / frame_size;
+  int32_t sample_data;
 
+  float *frame_data = malloc(sample_count * sizeof(float));
 
-  for (uint32_t i = 0; i < samples_count; i++)
+  for (uint32_t i = 0; i < frame_count; i++)
   {
     for (uint16_t j = 0; j < wave_format.nChannels; j++)
     {
-      int16_t data = 0;
-      fread(&data, sizeof(int16_t), 1, file);
-      samples_data[i * wave_format.nChannels + j] = (float) data / (float) INT16_MAX;
+      fread(&sample_data, sample_size, 1, file);
+      frame_data[i * wave_format.nChannels + j] = (float) sample_data / (float) sample_bits_max;
     }
   }
 
   fclose(file);
 
   audio_source->channels = wave_format.nChannels;
-  audio_source->samples_count = samples_count;
-  audio_source->samples_data = samples_data;
+  audio_source->frame_size = frame_size;
+  audio_source->frame_count = frame_count;
+  audio_source->frame_data = frame_data;
+}
+
+uint32_t sce_audio_playing_source_copy(SCE_AudioPlayingSource *playing_source, const uint32_t frame_count,
+                                       const float *destination, DWORD *flags)
+{
+  uint32_t copied_frames_count = sce_audio_source_copy(playing_source->audio_source, playing_source->frame_index,
+                                                       frame_count, destination);
+
+  if (copied_frames_count == 0)
+  {
+    *flags = AUDCLNT_BUFFERFLAGS_SILENT;
+  }
+  else
+  {
+    playing_source->frame_index += copied_frames_count;
+    *flags = 0;
+  }
+
+  return copied_frames_count;
 }
 
 bool sce_audio_engine_init(SCE_AudioEngine *audio_engine)
@@ -138,7 +149,7 @@ bool sce_audio_engine_play(SCE_AudioEngine *audio_engine, SCE_AudioSource *audio
   render_client->lpVtbl->GetBuffer(render_client, buffer_frame_count, &buffer_data);
 
   DWORD copy_flags;
-  sce_audio_source_copy(audio_source, buffer_frame_count, buffer_data, &copy_flags);
+  sce_audio_source_copy(audio_source, 0, buffer_frame_count, buffer_data, &copy_flags);
 
   render_client->lpVtbl->ReleaseBuffer(render_client, buffer_frame_count, copy_flags);
 
@@ -151,7 +162,7 @@ bool sce_audio_engine_play(SCE_AudioEngine *audio_engine, SCE_AudioSource *audio
     }
   }
 
-  audio_engine->playing_sources[i] = (SCE_AudioEnginePlayingSource){
+  audio_engine->playing_sources[i] = (SCE_AudioPlayingSource){
     .audio_source = audio_source,
     .audio_client = audio_client,
     .render_client = render_client,
@@ -173,12 +184,12 @@ bool sce_audio_engine_update(SCE_AudioEngine *audio_engine)
       continue;
     }
 
-    SCE_AudioEnginePlayingSource playing_source = audio_engine->playing_sources[i];
+    SCE_AudioPlayingSource playing_source = audio_engine->playing_sources[i];
 
     playing_source.audio_client->lpVtbl->GetCurrentPadding(playing_source.audio_client, &frames_padding);
     UINT32 frames_available = playing_source.buffer_frame_count - frames_padding;
     playing_source.render_client->lpVtbl->GetBuffer(playing_source.render_client, frames_available, &buffer_data);
-    sce_audio_source_copy(playing_source.audio_source, frames_available, buffer_data, &copy_flags);
+    sce_audio_playing_source_copy(&playing_source, frames_available, (float *) buffer_data, &copy_flags);
     playing_source.render_client->lpVtbl->ReleaseBuffer(playing_source.render_client, frames_available, copy_flags);
     // remove source from playing sources if silent
   }
